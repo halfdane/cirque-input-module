@@ -28,4 +28,6 @@ properties:
   y-axis-z-min:
     type: int
     default: 4
+  absolute-mode:
+    type: boolean
 

@@ -229,7 +229,65 @@ static int pinnacle_era_write(const struct device *dev, const uint16_t addr, uin
     return ret;
 }
 
-static void pinnacle_report_data(const struct device *dev) {
+static void pinnacle_report_data_abs(const struct device *dev) {
+    const struct pinnacle_config *config = dev->config;
+
+    if (config->absolute_mode) {
+        uint8_t packet[6] = {0};
+        int ret;
+        uint8_t skip = (config->no_taps) * 2;
+
+        ret = pinnacle_seq_read(dev, PINNACLE_2_2_PACKET0 + skip, packet, 6 - skip);
+        if (ret < 0) {
+            LOG_ERR("read packet: %d", ret);
+            return;
+        }
+
+        struct pinnacle_data *data = dev->data;
+
+        uint8_t btn = packet[0] & 0x3F;
+        LOG_INF("Button: %d", packet[0]); 
+        if (data->in_int) {
+            LOG_DBG("Clearing status bit");
+            ret = pinnacle_clear_status(dev);
+            data->in_int = true;
+        }
+
+        if (!config->no_taps && (btn || data->btn_cache)) {
+            for (int i = 0; i < 3; i++) {
+                uint8_t btn_val = btn & BIT(i);
+                if (btn_val != (data->btn_cache & BIT(i))) {
+                    input_report_key(dev, INPUT_BTN_0 + i, btn_val ? 1 : 0, false, K_FOREVER);
+                }
+            }
+        }
+
+        uint16_t x = (uint16_t)(((packet[4 - skip] & 0x0F) << 8) | packet[2 - skip]);
+        uint16_t y = (uint16_t)(((packet[4 - skip] & 0xF0) << 4) | packet[3 - skip]);
+        int8_t z = (uint8_t)(packet[5 - skip] & 0x1F);
+
+        LOG_INF("got this: %d %d %d - previous: %d %d", x, y, z, data->previous_x, data->previous_y);
+
+        if (data->previous_x != 65535 && data->previous_y != 65535 && z >0) {
+            input_report_rel(dev, INPUT_REL_X, x - data->previous_x, false, K_FOREVER);
+            input_report_rel(dev, INPUT_REL_Y, y - data->previous_y, true, K_FOREVER);
+        }
+
+        if (z > 0) {
+            data->previous_x = x;
+            data->previous_y = y;
+        } else {
+            data->previous_x = -1;
+            data->previous_y = -1;
+        }
+        
+
+        return;
+    }
+
+}
+
+static void pinnacle_report_data_rel(const struct device *dev) {
     const struct pinnacle_config *config = dev->config;
     uint8_t packet[3];
     int ret;
@@ -292,7 +350,14 @@ static void pinnacle_report_data(const struct device *dev) {
 
 static void pinnacle_work_cb(struct k_work *work) {
     struct pinnacle_data *data = CONTAINER_OF(work, struct pinnacle_data, work);
-    pinnacle_report_data(data->dev);
+    const struct device *dev = data->dev;
+    const struct pinnacle_config *config = dev->config;
+
+    if (config->absolute_mode) {
+        pinnacle_report_data_abs(dev);
+    } else {
+        pinnacle_report_data_rel(dev);
+    }
 }
 
 static void pinnacle_gpio_cb(const struct device *port, struct gpio_callback *cb, uint32_t pins) {
@@ -506,6 +571,14 @@ static int pinnacle_init(const struct device *dev) {
         return ret;
     }
     uint8_t feed_cfg1 = PINNACLE_FEED_CFG1_EN_FEED;
+    if (config->absolute_mode) {
+        feed_cfg1 |= PINNACLE_FEED_CFG1_ABS_MODE;
+        data->previous_x = -1;
+        data->previous_y = -1;
+        LOG_ERR("Using absolute mode");
+    } else {
+        LOG_ERR("Using relative mode");
+    }
     if (config->x_invert) {
         feed_cfg1 |= PINNACLE_FEED_CFG1_INV_X;
     }
@@ -574,6 +647,7 @@ static int pinnacle_pm_action(const struct device *dev, enum pm_device_action ac
         .sleep_en = DT_INST_PROP(n, sleep),                                                        \
         .no_taps = DT_INST_PROP(n, no_taps),                                                       \
         .no_secondary_tap = DT_INST_PROP(n, no_secondary_tap),                                     \
+        .absolute_mode = DT_INST_PROP(n, absolute_mode),                                           \
         .x_axis_z_min = DT_INST_PROP_OR(n, x_axis_z_min, 5),                                       \
         .y_axis_z_min = DT_INST_PROP_OR(n, y_axis_z_min, 4),                                       \
         .sensitivity = DT_INST_ENUM_IDX_OR(n, sensitivity, PINNACLE_SENSITIVITY_1X),               \
