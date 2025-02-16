@@ -245,42 +245,24 @@ static void pinnacle_report_data_abs(const struct device *dev) {
 
         struct pinnacle_data *data = dev->data;
 
-        uint8_t btn = packet[0] & 0x3F;
-        LOG_INF("Button: %d", packet[0]); 
         if (data->in_int) {
             LOG_DBG("Clearing status bit");
             ret = pinnacle_clear_status(dev);
             data->in_int = true;
         }
 
-        if (!config->no_taps && (btn || data->btn_cache)) {
-            for (int i = 0; i < 3; i++) {
-                uint8_t btn_val = btn & BIT(i);
-                if (btn_val != (data->btn_cache & BIT(i))) {
-                    input_report_key(dev, INPUT_BTN_0 + i, btn_val ? 1 : 0, false, K_FOREVER);
-                }
-            }
-        }
+        // no inbuilt tap detection in absolute mode
 
         uint16_t x = (uint16_t)(((packet[4 - skip] & 0x0F) << 8) | packet[2 - skip]);
         uint16_t y = (uint16_t)(((packet[4 - skip] & 0xF0) << 4) | packet[3 - skip]);
         int8_t z = (uint8_t)(packet[5 - skip] & 0x1F);
 
-        LOG_INF("got this: %d %d %d - previous: %d %d", x, y, z, data->previous_x, data->previous_y);
-
-        if (data->previous_x != 65535 && data->previous_y != 65535 && z >0) {
-            input_report_rel(dev, INPUT_REL_X, x - data->previous_x, false, K_FOREVER);
-            input_report_rel(dev, INPUT_REL_Y, y - data->previous_y, true, K_FOREVER);
-        }
+        LOG_INF("got this: %d %d %d", x, y, z);
 
         if (z > 0) {
-            data->previous_x = x;
-            data->previous_y = y;
-        } else {
-            data->previous_x = -1;
-            data->previous_y = -1;
+            input_report_abs(dev, INPUT_ABS_X, x, false, K_FOREVER);
+            input_report_abs(dev, INPUT_ABS_Y, y, true, K_FOREVER);
         }
-        
 
         return;
     }
@@ -543,7 +525,7 @@ static int pinnacle_init(const struct device *dev) {
 
     uint8_t packet[1];
     ret = pinnacle_seq_read(dev, PINNACLE_SLEEP_INTERVAL, packet, 1);
-
+ 
     if (ret >= 0) {
         LOG_DBG("Default sleep interval %d", packet[0]);
     }
@@ -573,8 +555,6 @@ static int pinnacle_init(const struct device *dev) {
     uint8_t feed_cfg1 = PINNACLE_FEED_CFG1_EN_FEED;
     if (config->absolute_mode) {
         feed_cfg1 |= PINNACLE_FEED_CFG1_ABS_MODE;
-        data->previous_x = -1;
-        data->previous_y = -1;
         LOG_ERR("Using absolute mode");
     } else {
         LOG_ERR("Using relative mode");

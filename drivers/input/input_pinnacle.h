@@ -78,7 +78,6 @@ struct pinnacle_data {
     const struct device *dev;
     struct gpio_callback gpio_cb;
     struct k_work work;
-    uint16_t previous_x, previous_y;
 };
 
 enum pinnacle_sensitivity {
