@@ -231,42 +231,50 @@ static int pinnacle_era_write(const struct device *dev, const uint16_t addr, uin
 
 static void pinnacle_report_data_abs(const struct device *dev) {
     const struct pinnacle_config *config = dev->config;
-
-    if (config->absolute_mode) {
-        uint8_t packet[6] = {0};
-        int ret;
-        uint8_t skip = (config->no_taps) * 2;
-
-        ret = pinnacle_seq_read(dev, PINNACLE_2_2_PACKET0 + skip, packet, 6 - skip);
-        if (ret < 0) {
-            LOG_ERR("read packet: %d", ret);
-            return;
-        }
-
-        struct pinnacle_data *data = dev->data;
-
-        if (data->in_int) {
-            LOG_DBG("Clearing status bit");
-            ret = pinnacle_clear_status(dev);
-            data->in_int = true;
-        }
-
-        // no inbuilt tap detection in absolute mode
-
-        uint16_t x = (uint16_t)(((packet[4 - skip] & 0x0F) << 8) | packet[2 - skip]);
-        uint16_t y = (uint16_t)(((packet[4 - skip] & 0xF0) << 4) | packet[3 - skip]);
-        int8_t z = (uint8_t)(packet[5 - skip] & 0x1F);
-
-        LOG_INF("got this: %d %d %d", x, y, z);
-
-        if (z > 0) {
-            input_report_abs(dev, INPUT_ABS_X, x, false, K_FOREVER);
-            input_report_abs(dev, INPUT_ABS_Y, y, true, K_FOREVER);
-        }
-
+    uint8_t packet[6];
+    int ret;
+    ret = pinnacle_seq_read(dev, PINNACLE_STATUS1, packet, 1);
+    if (ret < 0) {
+        LOG_ERR("read status: %d", ret);
         return;
     }
+    if (!(packet[0] & PINNACLE_STATUS1_SW_DR)) {
+        return;
+    }
+    ret = pinnacle_seq_read(dev, PINNACLE_2_2_PACKET0, packet, 6);
+    if (ret < 0) {
+        LOG_ERR("read packet: %d", ret);
+        return;
+    }
+    struct pinnacle_data *data = dev->data;
+    // TODO: Enable SW3-SW5 as well
+    uint8_t btn = packet[0] &
+                  (PINNACLE_PACKET0_BTN_PRIM | PINNACLE_PACKET0_BTN_SEC | PINNACLE_PACKET0_BTN_AUX);
+    uint8_t x_low = packet[2];
+    uint8_t y_low = packet[3];
+    uint8_t xy_high = packet[4];
+    int16_t x = ((xy_high & 0x0F) << 8) | x_low;
+    int16_t y = ((xy_high & 0xF0) << 4) | y_low;
+    LOG_DBG("button: %d, x: %d y: %d", btn, x, y);
+    if (data->in_int) {
+        LOG_DBG("Clearing status bit");
+        ret = pinnacle_clear_status(dev);
+        data->in_int = true;
+    }
 
+    if (!config->no_taps && (btn || data->btn_cache)) {
+        for (int i = 0; i < 3; i++) {
+            uint8_t btn_val = btn & BIT(i);
+            if (btn_val != (data->btn_cache & BIT(i))) {
+                input_report_key(dev, INPUT_BTN_0 + i, btn_val ? 1 : 0, false, K_FOREVER);
+            }
+        }
+    }
+
+    data->btn_cache = btn;
+
+    input_report_abs(dev, INPUT_ABS_X, x, false, K_FOREVER);
+    input_report_abs(dev, INPUT_ABS_Y, y, true, K_FOREVER);
 }
 
 static void pinnacle_report_data_rel(const struct device *dev) {
