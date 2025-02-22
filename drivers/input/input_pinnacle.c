@@ -255,6 +255,8 @@ static void pinnacle_report_data_abs(const struct device *dev) {
     uint8_t xy_high = packet[4];
     int16_t x = ((xy_high & 0x0F) << 8) | x_low;
     int16_t y = ((xy_high & 0xF0) << 4) | y_low;
+    int8_t z = (uint8_t)(packet[5] & 0x1F);
+
     LOG_DBG("button: %d, x: %d y: %d", btn, x, y);
     if (data->in_int) {
         LOG_DBG("Clearing status bit");
@@ -272,9 +274,10 @@ static void pinnacle_report_data_abs(const struct device *dev) {
     }
 
     data->btn_cache = btn;
-
-    input_report_abs(dev, INPUT_ABS_X, x, false, K_FOREVER);
-    input_report_abs(dev, INPUT_ABS_Y, y, true, K_FOREVER);
+    if (z > 0) {
+        input_report_abs(dev, INPUT_ABS_X, x, false, K_FOREVER);
+        input_report_abs(dev, INPUT_ABS_Y, y, true, K_FOREVER);
+    }
 }
 
 static void pinnacle_report_data_rel(const struct device *dev) {
