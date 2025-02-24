@@ -46,7 +46,7 @@ properties:
       is: 128 ≤ X ≤1920 and 64 ≤ Y ≤ 1472, but on my touchpad, I need other values.
   absolute-mode-clamp-max-x:
     type: int
-    default: ≤1920
+    default: 1920
     description: |
       Specification says that active reporting of absolute position
       is: 128 ≤ X ≤1920 and 64 ≤ Y ≤ 1472, but on my touchpad, I need other values.
