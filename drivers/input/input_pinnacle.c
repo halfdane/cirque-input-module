@@ -275,11 +275,6 @@ static void pinnacle_report_data_abs(const struct device *dev) {
 
     data->btn_cache = btn;
     if (z > 0) {
-        int min_x = config->absolute_mode_clamp_min_x;
-        int max_x = config->absolute_mode_clamp_max_x;
-        int min_y = config->absolute_mode_clamp_min_y;
-        int max_y = config->absolute_mode_clamp_max_y;
-
         if (x < config->absolute_mode_clamp_min_x) {
             x = config->absolute_mode_clamp_min_x;
         } else if (x > config->absolute_mode_clamp_max_x) {
