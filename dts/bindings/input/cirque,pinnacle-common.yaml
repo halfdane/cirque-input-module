@@ -30,4 +30,10 @@ properties:
     default: 4
   absolute-mode:
     type: boolean
+  absolute-mode-scale-to-width:
+    type: int
+    default: 1024
+  absolute-mode-scale-to-height:
+    type: int
+    default: 1024
 
