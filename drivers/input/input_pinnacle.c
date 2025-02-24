@@ -275,29 +275,25 @@ static void pinnacle_report_data_abs(const struct device *dev) {
 
     data->btn_cache = btn;
     if (z > 0) {
-        // specification says that active reporting of absolute position values
-        // is: 128 ≤ X ≤1920 and 64 ≤ Y ≤1472
-        // in reality, I see
-        // 271 <= X <= 1713 and 199 <= Y <= 1388
-        int min_x = 271;
-        int max_x = 1713;
-        int min_y = 199;
-        int max_y = 1388;
+        int min_x = config->absolute_mode_clamp_min_x;
+        int max_x = config->absolute_mode_clamp_max_x;
+        int min_y = config->absolute_mode_clamp_min_y;
+        int max_y = config->absolute_mode_clamp_max_y;
 
-        if (x < min_x) {
-            x = min_x;
-        } else if (x > max_x) {
-            x = max_x;
+        if (x < config->absolute_mode_clamp_min_x) {
+            x = config->absolute_mode_clamp_min_x;
+        } else if (x > config->absolute_mode_clamp_max_x) {
+            x = config->absolute_mode_clamp_max_x;
         }
-        if (y < min_y) {
-            y = min_y;
-        } else if (y > max_y) {
-            y = max_y;
+        if (y < config->absolute_mode_clamp_min_y) {
+            y = config->absolute_mode_clamp_min_y;
+        } else if (y > config->absolute_mode_clamp_max_y) {
+            y = config->absolute_mode_clamp_max_y;
         }
 
         // scale to be in the configured interval
-        x = ((x - min_x) * config->absolute_mode_scale_to_width) / (max_x - min_x);
-        y = ((y - min_y) * config->absolute_mode_scale_to_height) / (max_y - min_y);
+        x = ((x - config->absolute_mode_clamp_min_x) * config->absolute_mode_scale_to_width) / (config->absolute_mode_clamp_max_x - config->absolute_mode_clamp_min_x);
+        y = ((y - config->absolute_mode_clamp_min_y) * config->absolute_mode_scale_to_height) / (config->absolute_mode_clamp_max_y - config->absolute_mode_clamp_min_y);
 
         input_report_abs(dev, INPUT_ABS_X, x, false, K_FOREVER);
         input_report_abs(dev, INPUT_ABS_Y, y, true, K_FOREVER);
@@ -667,6 +663,10 @@ static int pinnacle_pm_action(const struct device *dev, enum pm_device_action ac
         .absolute_mode = DT_INST_PROP(n, absolute_mode),                                           \
         .absolute_mode_scale_to_width = DT_INST_PROP(n, absolute_mode_scale_to_width),             \
         .absolute_mode_scale_to_height = DT_INST_PROP(n, absolute_mode_scale_to_height),           \
+        .absolute_mode_clamp_min_x = DT_INST_PROP(n, absolute_mode_clamp_min_x),                   \
+        .absolute_mode_clamp_max_x = DT_INST_PROP(n, absolute_mode_clamp_max_x),                   \
+        .absolute_mode_clamp_min_y = DT_INST_PROP(n, absolute_mode_clamp_min_y),                   \
+        .absolute_mode_clamp_max_y = DT_INST_PROP(n, absolute_mode_clamp_max_y),                   \
         .x_axis_z_min = DT_INST_PROP_OR(n, x_axis_z_min, 5),                                       \
         .y_axis_z_min = DT_INST_PROP_OR(n, y_axis_z_min, 4),                                       \
         .sensitivity = DT_INST_ENUM_IDX_OR(n, sensitivity, PINNACLE_SENSITIVITY_1X),               \
